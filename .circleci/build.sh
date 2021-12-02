@@ -49,7 +49,7 @@ function finerr() {
 }
 # Compile plox
 function compile() {
-    make O=out ARCH=arm64 vayu_user_defconfig
+    make O=out ARCH=arm64 begonia_user_defconfig
     make -j$(nproc --all) O=out \
                     ARCH=arm64 \
                     CC=clang \
@@ -66,7 +66,7 @@ function compile() {
 # Zipping
 function zipping() {
     cd AnyKernel || exit 1
-    zip -r9 vayu Kernel-${TANGGAL}.zip *
+    zip -r9 begaynia Kernel-${TANGGAL}.zip *
     cd ..
 }
 sticker
