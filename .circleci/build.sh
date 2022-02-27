@@ -292,7 +292,7 @@ build_kernel() {
 			STRIP=llvm-strip \
 			NM=llvm-nm \
 			OBJCOPY=llvm-objcopy \
-			LD="$LINKER"
+			
 		)
 	elif [ $COMPILER = "gcc" ]
 	then
