@@ -35,7 +35,7 @@ KERVER=$(make kernelversion)
 COMMIT_HEAD=$(git log --oneline -1)
 
 # Date and Time
-DATE=$(TZ=Asia/Jakarta date +"%Y%m%d-%T")
+DATE=$(TZ=Asia/Bangkok date +"%Y%m%d-%T")
 TANGGAL=$(date +"%F%S")
 
 # Specify Final Zip Name
@@ -44,7 +44,7 @@ FINAL_ZIP=${ZIPNAME}-${VERSION}-${DEVICE}-${DRONE_BUILD_NUMBER}.zip
 
 ##----------------------------------------------------------##
 # Specify compiler ( azure , eva gcc , aosp , neutron & proton )
-COMPILER=aosp
+COMPILER=eva
 
 ##----------------------------------------------------------##
 # Specify Linker
@@ -229,13 +229,8 @@ START=$(date +"%s")
 	       ARCH=arm64 \
 	       CROSS_COMPILE_ARM32=arm-eabi- \
 	       CROSS_COMPILE=aarch64-elf- \
-	       AR=llvm-ar \
-	       NM=llvm-nm \
-	       OBJCOPY=llvm-objcopy \
-	       OBJDUMP=llvm-objdump \
-	       STRIP=llvm-strip \
-	       OBJSIZE=llvm-size \
 	       V=$VERBOSE 2>&1 | tee error.log
+	       
         elif [ -d ${KERNEL_DIR}/aosp-clang ];
            then
                make -kj$(nproc --all) O=out \
