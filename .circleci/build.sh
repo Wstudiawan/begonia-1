@@ -11,13 +11,13 @@ KERNEL_DIR="$(pwd)"
 ##----------------------------------------------------------##
 # Device Name and Model
 MODEL=Xiaomi
-DEVICE=Beryllium
+DEVICE=Begonia
 
 # Kernel Version Code
-VERSION=X1
+VERSION=Stable
 
 # Kernel Defconfig
-DEFCONFIG=beryllium_defconfig
+DEFCONFIG=begonia_user_defconfig
 
 # Select LTO variant ( Full LTO by default )
 DISABLE_LTO=0
@@ -39,12 +39,12 @@ DATE=$(TZ=Asia/Kolkata date +"%Y%m%d-%T")
 TANGGAL=$(date +"%F%S")
 
 # Specify Final Zip Name
-ZIPNAME=Nexus
+ZIPNAME=Begonia
 FINAL_ZIP=${ZIPNAME}-${VERSION}-${DEVICE}-${DRONE_BUILD_NUMBER}.zip
 
 ##----------------------------------------------------------##
 # Specify compiler ( azure , eva gcc , aosp , neutron & proton )
-COMPILER=azure
+COMPILER=eva
 
 ##----------------------------------------------------------##
 # Specify Linker
@@ -93,8 +93,8 @@ function cloneTC() {
 	elif [ $COMPILER = "eva" ];
 	then
 	post_msg " Cloning Eva GCC ToolChain "
-	git clone --depth=1 https://github.com/mvaisakh/gcc-arm64.git -b gcc-new gcc64
-	git clone --depth=1 https://github.com/mvaisakh/gcc-arm.git -b gcc-new gcc32
+	git clone --depth=1 https://github.com/mvaisakh/gcc-arm64.git -b gcc-master gcc64
+	git clone --depth=1 https://github.com/mvaisakh/gcc-arm.git -b gcc-master gcc32
 	PATH=$KERNEL_DIR/gcc64/bin/:$KERNEL_DIR/gcc32/bin/:/usr/bin:$PATH
 	
 	elif [ $COMPILER = "aosp" ];
