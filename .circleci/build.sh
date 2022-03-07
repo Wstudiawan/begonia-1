@@ -44,7 +44,7 @@ FINAL_ZIP=${ZIPNAME}-${VERSION}-${DEVICE}-${DRONE_BUILD_NUMBER}.zip
 
 ##----------------------------------------------------------##
 # Specify compiler ( azure , eva gcc , aosp , neutron & proton )
-COMPILER=neutron
+COMPILER=aosp
 
 ##----------------------------------------------------------##
 # Specify Linker
@@ -241,19 +241,12 @@ START=$(date +"%s")
                make -kj$(nproc --all) O=out \
 	       ARCH=arm64 \
 	       CC=clang \
-               HOSTCC=clang \
-	       HOSTCXX=clang++ \
-	       CLANG_TRIPLE=aarch64-linux-gnu- \
+               CLANG_TRIPLE=aarch64-linux-gnu- \
 	       CROSS_COMPILE=aarch64-linux-android- \
 	       CROSS_COMPILE_ARM32=arm-linux-androideabi- \
-	       AR=llvm-ar \
-	       NM=llvm-nm \
-	       OBJCOPY=llvm-objcopy \
-	       OBJDUMP=llvm-objdump \
-               STRIP=llvm-strip \
-	       READELF=llvm-readelf \
-	       OBJSIZE=llvm-size \
 	       V=$VERBOSE 2>&1 | tee error.log
+	       
+	       
 	fi
 	
 	# Verify Files
