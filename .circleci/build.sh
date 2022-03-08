@@ -304,7 +304,7 @@ build_kernel() {
   
 	function zipping() {
 	# Copy Files To AnyKernel3 Zip
-	cp $IMAGE AnyKernel3
+	cp $FILES AnyKernel3
 	
 	# Zipping and Push Kernel
 	cd AnyKernel3 || exit 1
