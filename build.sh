@@ -1,171 +1,336 @@
-#! /bin/sh
+#! /bin/bash
+# shellcheck disable=SC2154
 
-# Define Path
-MainPath=$(pwd)
-GCC64_Path=$MainPath/../GCC64
-GCC_Path=$MainPath/../GCC
-gcc64_Path=$MainPath/../gcc64
-gcc_Path=$MainPath/../gcc
-Clang_Path=$MainPath/../clang
-DTC_Path=$MainPath/../DragonTC
-LOG=$MainPath/error.log
-USER="Imperfect"
-HOST="GengKapak"
+ # Script For Building Android arm64 Kernel
+ #
+ # Copyright (c) 2018-2021 Wstudiawan <studiawanwahyu@gmail.com>
+ #
+ # Licensed under the Apache License, Version 2.0 (the "License");
+ # you may not use this file except in compliance with the License.
+ # You may obtain a copy of the License at
+ #
+ #      http://www.apache.org/licenses/LICENSE-2.0
+ #
+ # Unless required by applicable law or agreed to in writing, software
+ # distributed under the License is distributed on an "AS IS" BASIS,
+ # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ #
 
-# Message
-CAP1="
-# For Redmi Note 8 Pro (begonia) #
-Build By : $USER
-Host : $HOST
-Base Firmware : Q-OSS
-Compiler Type : $Compiler
-Build Success in : $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)
-"
+set -e
 
-CAP2="
-Build Fail in : $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)
-"
+#Kernel building script
 
-# Make zip
-MakeZip() {
-    Any=$MainPath/../AnyKernel3
-    if [ ! -d $Any ];then
-	    git clone https://github.com/ImperfectNiBos/AnyKernel3 -b master $Any
-    else
-        cd $Any
-        git reset --hard
-        git fetch origin master
-        git checkout master
-        git reset --hard origin/master
-    fi
-    cd $Any
-    cp -af $MainPath/out/arch/arm64/boot/Image.gz-dtb $Any
-    cp -af anykernel-real.sh anykernel.sh
-    sed -i "s/kernel.string=.*/kernel.string=$KERNEL_NAME-$HeadCommit by ${USER}/g" anykernel.sh
-    zip -r $MainPath/"[${Compiler}][Q-OSS][$ZIP_KERNEL_VERSION]-$KERNEL_NAME-$TIME.zip" * -x .git .git/**\* ./.git ./anykernel-real.sh ./.gitignore ./LICENSE ./README.md ./*.zip
-    cd $MainPath
+# Function to show an informational message
+msg() {
+	echo
+    echo -e "\e[1;32m$*\e[0m"
+    echo
 }
 
-# Clone Compiler
-CloneGCC() {
-    if [ ! -d $GCC64_Path ];then
-	    git clone --depth=1 https://github.com/mvaisakh/gcc-arm64 $GCC64_Path
-    fi
-    if [ ! -d $GCC_Path ];then
-	    git clone --depth=1 https://github.com/mvaisakh/gcc-arm $GCC_Path
-    fi
+err() {
+    echo -e "\e[1;41m$*\e[0m"
+    exit 1
 }
 
-CloneCLANG() {
-    if [ ! -d $Clang_Path ];then
-	    git clone --depth=1 https://github.com/kdrag0n/proton-clang $Clang_Path
-    fi
+cdir() {
+	cd "$1" 2>/dev/null || \
+		err "The directory $1 doesn't exists !"
 }
 
-CloneDTC() {
-    if [ ! -d $DTC_Path ];then
-	    git clone --depth=1 https://github.com/NusantaraDevs/DragonTC $DTC_Path
-    fi
-    if [ ! -d $gcc64_Path ];then
-	    git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 $gcc64_Path
-    fi
-    if [ ! -d $gcc_Path ];then
-	    git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 $gcc_Path
-    fi
+##------------------------------------------------------##
+##----------Basic Informations, COMPULSORY--------------##
+
+# The defult directory where the kernel should be placed
+KERNEL_DIR="$(pwd)"
+BASEDIR="$(basename "$KERNEL_DIR")"
+
+# The name of the Kernel, to name the ZIP
+ZIPNAME="PuncakLawangKernel"
+
+# Build Author
+# Take care, it should be a universal and most probably, case-sensitive
+AUTHOR="Wstudiawan"
+
+# Architecture
+ARCH=arm64
+
+# The name of the device for which the kernel is built
+MODEL="Xiaomi Redmi Note 8 Pro"
+
+# The codename of the device
+DEVICE="begonia"
+
+# The defconfig which should be used. Get it from config.gz from
+# your device or check source
+DEFCONFIG=begonia_user_defconfig
+
+# Specify compiler. 
+# 'clang' or 'gcc'
+COMPILER=gcc
+
+# Clean source prior building. 1 is NO(default) | 0 is YES
+INCREMENTAL=1
+
+# Push ZIP to Telegram. 1 is YES | 0 is NO(default)
+PTTG=1
+	if [ $PTTG = 1 ]
+	then
+		# Set Telegram Chat ID
+		CHATID="-1001421078455"
+	fi
+
+# Generate a full DEFCONFIG prior building. 1 is YES | 0 is NO(default)
+DEF_REG=0
+
+# Files/artifacts
+FILES=Image
+
+# Build dtbo.img (select this only if your source has support to building dtbo.img)
+# 1 is YES | 0 is NO(default)
+BUILD_DTBO=0
+	if [ $BUILD_DTBO = 1 ]
+	then 
+		# Set this to your dtbo path. 
+		# Defaults in folder out/arch/arm64/boot/dts
+		DTBO_PATH="xiaomi/begonia-mt6785-overlay.dtbo"
+	fi
+
+# Silence the compilation
+# 1 is YES(default) | 0 is NO
+SILENCE=0
+
+# Debug purpose. Send logs on every successfull builds
+# 1 is YES | 0 is NO(default)
+LOG_DEBUG=0
+
+##------------------------------------------------------##
+##---------Do Not Touch Anything Beyond This------------##
+
+# Check if we are using a dedicated CI ( Continuous Integration ), and
+# set KBUILD_BUILD_VERSION and KBUILD_BUILD_HOST and CI_BRANCH
+
+## Set defaults first
+DISTRO=$(cat /etc/issue | awk '{ print substr( $0, 1, length($0)-8 ) }')
+KBUILD_BUILD_HOST=$(uname -a | awk '{print $2}')
+CI_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+TERM=xterm
+export KBUILD_BUILD_HOST CI_BRANCH TERM
+
+## Check for CI
+if [ "$CI" ]
+then
+	if [ "$CIRCLECI" ]
+	then
+		export KBUILD_BUILD_VERSION=$CIRCLE_BUILD_NUM
+		export KBUILD_BUILD_HOST="CircleCI"
+		export CI_BRANCH=$CIRCLE_BRANCH
+	fi
+	if [ "$DRONE" ]
+	then
+		export KBUILD_BUILD_VERSION=$DRONE_BUILD_NUMBER
+		export KBUILD_BUILD_HOST=$DRONE_SYSTEM_HOST
+		export CI_BRANCH=$DRONE_BRANCH
+		export BASEDIR=$DRONE_REPO_NAME # overriding
+		export SERVER_URL="${DRONE_SYSTEM_PROTO}://${DRONE_SYSTEM_HOSTNAME}/${AUTHOR}/${BASEDIR}/${KBUILD_BUILD_VERSION}"
+	else
+		echo "Not presetting Build Version"
+	fi
+fi
+
+#Check Kernel Version
+KERVER=$(make kernelversion)
+
+
+# Set a commit head
+COMMIT_HEAD=$(git log --oneline -1)
+
+# Set Date 
+DATE=$(TZ=Asia/Jakarta date +"%Y%m%d-%s")
+
+#Now Its time for other stuffs like cloning, exporting, etc
+
+ clone() {
+	echo " "
+	if [ $COMPILER = "gcc" ]
+	then
+		msg "|| Cloning GCC 12.x baremetal ||"
+		git clone --depth=1 https://github.com/mvaisakh/gcc-arm64.git gcc64 -b gcc-new
+		git clone --depth=1 https://github.com/mvaisakh/gcc-arm.git gcc32 -b gcc-new
+		GCC64_DIR=$KERNEL_DIR/gcc64
+		GCC32_DIR=$KERNEL_DIR/gcc32
+	fi
+	
+	if [ $COMPILER = "clang" ]
+	then
+		msg "|| Cloning Clang-13 ||"
+		git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang-llvm
+		# Toolchain Directory defaults to clang-llvm
+		TC_DIR=$KERNEL_DIR/clang-llvm
+	fi
+
+	msg "|| Cloning Anykernel ||"
+	git clone --depth 1 https://github.com/Wstudiawan/AnyKernel3-1 -b pbns AnyKernel
+	msg "|| Cloning libufdt ||"
+	git clone https://android.googlesource.com/platform/system/libufdt "$KERNEL_DIR"/scripts/ufdt/libufdt
 }
 
-# Define Config
-HeadCommit="$(git log --pretty=format:'%h' -1)"
-export KBUILD_BUILD_USER="$USER"
-export KBUILD_BUILD_HOST="$HOST"
-Defconfig="begonia_user_defconfig"
-KERNEL_NAME=$(cat "$MainPath/arch/arm64/configs/$Defconfig" | grep "CONFIG_LOCALVERSION=" | sed 's/CONFIG_LOCALVERSION="-*//g' | sed 's/"*//g' )
-ZIP_KERNEL_VERSION="4.14.$(cat "$MainPath/Makefile" | grep "SUBLEVEL =" | sed 's/SUBLEVEL = *//g')$(cat "$(pwd)/Makefile" | grep "EXTRAVERSION =" | sed 's/EXTRAVERSION = *//g')"
+##------------------------------------------------------##
 
-# Building
-BuildGCC() {
-    Compiler=GCC
-    rm -rf out $LOG
-    exec 2> >(tee -a error.log >&2)
-    TIME=$(date +"%m%d%H%M")
-    BUILD_START=$(date +"%s")
-    make -j$(nproc --all) O=out ARCH=arm64 ${Defconfig}
-    make -j$(nproc --all) ARCH=arm64 SUBARCH=arm64 O=out \
-                          PATH=$GCC64_Path/bin:$GCC_Path/bin:/usr/bin:${PATH} \
-                          AR=aarch64-elf-ar \
-                          LD=ld.lld \
-                          OBJDUMP=aarch64-elf-objdump \
-                          CROSS_COMPILE=aarch64-elf- \
-                          CROSS_COMPILE_ARM32=arm-eabi-
+exports() {
+	KBUILD_BUILD_USER=$AUTHOR
+	SUBARCH=$ARCH
+
+	if [ $COMPILER = "clang" ]
+	then
+		KBUILD_COMPILER_STRING=$("$TC_DIR"/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')
+		PATH=$TC_DIR/bin/:$PATH
+	elif [ $COMPILER = "gcc" ]
+	then
+		KBUILD_COMPILER_STRING=$("$GCC64_DIR"/bin/aarch64-elf-gcc --version | head -n 1)
+		PATH=$GCC64_DIR/bin/:$GCC32_DIR/bin/:/usr/bin:$PATH
+	fi
+
+	BOT_MSG_URL="https://api.telegram.org/bot1446507242:AAFivf422Yvh3CL7y98TJmxV1KgyKByuPzM/sendMessage"
+	BOT_BUILD_URL="https://api.telegram.org/bot1446507242:AAFivf422Yvh3CL7y98TJmxV1KgyKByuPzM/sendDocument"
+	PROCS=$(nproc --all)
+
+	export KBUILD_BUILD_USER ARCH SUBARCH PATH \
+		KBUILD_COMPILER_STRING BOT_MSG_URL \
+		BOT_BUILD_URL PROCS
 }
 
-BuildCLANG() {
-    Compiler=Proton
-    rm -rf out $LOG
-    exec 2> >(tee -a error.log >&2)
-    TIME=$(date +"%m%d%H%M")
-    BUILD_START=$(date +"%s")
-    make -j$(nproc --all) O=out ARCH=arm64 ${Defconfig}
-    make -j$(nproc --all) ARCH=arm64 SUBARCH=arm64 O=out \
-                          PATH=$Clang_Path/bin:/usr/bin:${PATH} \
-                          LD_LIBRARY_PATH=$Clang_Path/lib:${LD_LIBRARY_PATH} \
-                          CC=clang \
-                          AS=llvm-as \
-                          NM=llvm-nm \
-                          OBJCOPY=llvm-objcopy \
-                          OBJDUMP=llvm-objdump \
-                          STRIP=llvm-strip \
-                          LD=ld.lld \
-                          CROSS_COMPILE=aarch64-linux-gnu- \
-                          CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+##---------------------------------------------------------##
+
+tg_post_msg() {
+	curl -s -X POST "$BOT_MSG_URL" -d chat_id="-1001421078455" \
+	-d "disable_web_page_preview=true" \
+	-d "parse_mode=html" \
+	-d text="$1"
+
 }
 
-BuildDTC() {
-    Compiler=DragonTC
-    rm -rf out $LOG
-    exec 2> >(tee -a error.log >&2)
-    TIME=$(date +"%m%d%H%M")
-    BUILD_START=$(date +"%s")
-    make -j$(nproc --all) O=out ARCH=arm64 ${Defconfig}
-    make -j$(nproc --all) ARCH=arm64 SUBARCH=arm64 O=out \
-                          PATH=$DTC_Path/bin:$gcc64_Path/bin:$gcc_Path/bin:/usr/bin:${PATH} \
-                          LD_LIBRARY_PATH=$DTC_Path/lib64:${LD_LIBRARY_PATH} \
-                          CC=clang \
-                          LD=ld.lld \
-                          CROSS_COMPILE=aarch64-linux-android- \
-                          CROSS_COMPILE_ARM32=arm-linux-androideabi- \
-                          CLANG_TRIPLE=aarch64-linux-gnu-
+##----------------------------------------------------------------##
+
+tg_post_build() {
+	#Post MD5Checksum alongwith for easeness
+	MD5CHECK=$(md5sum "$1" | cut -d' ' -f1)
+
+	#Show the Checksum alongwith caption
+	curl --progress-bar -F document=@"$1" "$BOT_BUILD_URL" \
+	-F chat_id="-1001421078455"  \
+	-F "disable_web_page_preview=true" \
+	-F "parse_mode=html" \
+	-F caption="$2 | <b>MD5 Checksum : </b><code>$MD5CHECK</code>"
 }
 
-# End Success or Fail
-End() {
-    if [ -e $MainPath/out/arch/arm64/boot/Image.gz-dtb ];then
-	    BUILD_END=$(date +"%s")
-	    DIFF=$((BUILD_END - BUILD_START))
-	    MakeZip
-	    echo "Build Success in : $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)"
-    else
-	    BUILD_END=$(date +"%s")
-	    DIFF=$((BUILD_END - BUILD_START))
-	    echo "Build Fail in : $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)"
-    fi
+##----------------------------------------------------------##
+
+build_kernel() {
+	if [ $INCREMENTAL = 0 ]
+	then
+		msg "|| Cleaning Sources ||"
+		make clean && make mrproper && rm -rf out
+	fi
+
+	if [ "$PTTG" = 1 ]
+ 	then
+		tg_post_msg "<b>CI Build Triggered</b>%0A<b>Device : </b><code>$MODEL [$DEVICE]</code>%0A<b>Kernel Version : </b><code>$KERVER</code>%0A<b>Branch : </b><code>$CI_BRANCH</code>%0A<b>Commit : </b><code>$COMMIT_HEAD</code>"
+	fi
+
+	make O=out $DEFCONFIG
+	if [ $DEF_REG = 1 ]
+	then
+		cp .config arch/arm64/configs/$DEFCONFIG
+		git add arch/arm64/configs/$DEFCONFIG
+		git commit -m "$DEFCONFIG: Regenerate
+
+						This is an auto-generated commit"
+	fi
+
+	BUILD_START=$(date +"%s")
+	
+	if [ $COMPILER = "clang" ]
+	then
+		MAKE+=(
+			CROSS_COMPILE=aarch64-linux-gnu- \
+			CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+			CC=clang \
+			AR=llvm-ar \
+			OBJDUMP=llvm-objdump \
+			STRIP=llvm-strip
+		)
+	elif [ $COMPILER = "gcc" ]
+	then
+		MAKE+=(
+			CROSS_COMPILE_ARM32=arm-eabi- \
+			CROSS_COMPILE=aarch64-elf-
+		)
+	fi
+	
+	if [ $SILENCE = "1" ]
+	then
+		MAKE+=( -s )
+	fi
+
+	msg "|| Started Compilation ||"
+	make -j"$PROCS" O=out \
+		"${MAKE[@]}" 2>&1 | tee error.log
+
+		BUILD_END=$(date +"%s")
+		DIFF=$((BUILD_END - BUILD_START))
+
+		if [ -f "$KERNEL_DIR"/out/arch/arm64/boot/$FILES ]
+		then
+			msg "|| Kernel successfully compiled ||"
+			if [ $BUILD_DTBO = 1 ]
+			then
+				msg "|| Building DTBO ||"
+				tg_post_msg "<code>Building DTBO..</code>"
+				python2 "$KERNEL_DIR/scripts/ufdt/libufdt/utils/src/mkdtboimg.py" \
+					create "$KERNEL_DIR/out/arch/arm64/boot/dtbo.img" --page_size=4096 "$KERNEL_DIR/out/arch/arm64/boot/dts/$DTBO_PATH"
+			fi
+				gen_zip
+			else
+			if [ "$PTTG" = 1 ]
+ 			then
+				tg_post_build "error.log" "<b>Build failed to compile after $((DIFF / 60)) minute(s) and $((DIFF % 60)) seconds</b>"
+			fi
+		fi
+	
 }
 
-# Compiler Choices
-DTC() {
-    CloneDTC
-    BuildDTC
-    End
+##--------------------------------------------------------------##
+
+gen_zip() {
+	msg "|| Zipping into a flashable zip ||"
+	mv "$KERNEL_DIR"/out/arch/arm64/boot/$FILES AnyKernel3/$FILES
+	cat "$KERNEL_DIR"/out/arch/arm64/boot/dts/qcom/*.dtb > AnyKernel3/dtb
+	if [ $BUILD_DTBO = 1 ]
+	then
+		mv "$KERNEL_DIR"/out/arch/arm64/boot/dtbo.img AnyKernel3/dtbo.img
+	fi
+	cdir AnyKernel3
+	zip -r $ZIPNAME-$DEVICE-"$DATE" . -x ".git*" -x "README.md" -x "*.zip"
+
+	## Prepare a final zip variable
+	ZIP_FINAL="$ZIPNAME-$DEVICE-$DATE"
+
+	if [ "$PTTG" = 1 ]
+ 	then
+		tg_post_build "$ZIP_FINAL.zip" "Build took : $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)"
+	fi
+	cd ..
 }
 
-CLANG() {
-    CloneCLANG
-    BuildCLANG
-    End
-}
+clone
+exports
+build_kernel
 
-GCC() {
-    CloneGCC
-    BuildGCC
-    End
-}
+if [ $LOG_DEBUG = "1" ]
+then
+	tg_post_build "error.log" "-1001421078455" "Debug Mode Logs"
+fi
+
+##----------------*****-----------------------------##
