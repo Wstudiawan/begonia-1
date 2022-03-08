@@ -301,25 +301,24 @@ build_kernel() {
 
 ##--------------------------------------------------------------##
 
-gen_zip() {
-	msg "|| Zipping into a flashable zip ||"
-	mv "$KERNEL_DIR"/out/arch/arm64/boot/$FILES AnyKernel3/$FILES
-	cat "$KERNEL_DIR"/out/arch/arm64/boot/dts/mediatek/*.dtb > AnyKernel3/dtb
-	if [ $BUILD_DTBO = 1 ]
-	then
-		mv "$KERNEL_DIR"/out/arch/arm64/boot/dtbo.img AnyKernel3/dtbo.img
-	fi
-	cdir AnyKernel3
-	zip -r $ZIPNAME-$DEVICE-"$DATE" . -x ".git*" -x "README.md" -x "*.zip"
+  
+	function zipping() {
+	# Copy Files To AnyKernel3 Zip
+	cp $IMAGE AnyKernel3
+	
+	# Zipping and Push Kernel
+	cd AnyKernel3 || exit 1
+        zip -r9 ${FINAL_ZIP} *
+        MD5CHECK=$(md5sum "$FINAL_ZIP" | cut -d' ' -f1)
+        push "$FINAL_ZIP" "Build took : $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s) | For <b>$MODEL ($DEVICE)</b> | <b>${KBUILD_COMPILER_STRING}</b> | <b>MD5 Checksum : </b><code>$MD5CHECK</code>"
+        cd ..
+	
 
-	## Prepare a final zip variable
-	ZIP_FINAL="$ZIPNAME-$DEVICE-$DATE"
-
-	if [ "$PTTG" = 1 ]
- 	then
-		tg_post_build "$ZIP_FINAL.zip" "Build took : $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)"
-	fi
-	cd ..
+	
+ 	
+		
+	
+	
 }
 
 clone
