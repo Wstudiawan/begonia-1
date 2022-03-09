@@ -43,7 +43,7 @@ ZIPNAME=Puncak-Lawang-Kernel
 FINAL_ZIP=${ZIPNAME}-${VERSION}-${DEVICE}-${DRONE_BUILD_NUMBER}.zip
 
 ##----------------------------------------------------------##
-# Specify compiler ( WS , eva gcc , aosp , neutron & proton )
+# Specify compiler ( azure , eva gcc , aosp , neutron & proton )
 COMPILER=aosp
 
 ##----------------------------------------------------------##
@@ -72,10 +72,10 @@ fi
 # Clone ToolChain
 function cloneTC() {
 	
-	if [ $COMPILER = "WS" ];
+	if [ $COMPILER = "azure" ];
 	then
-	post_msg " Cloning WS Clang ToolChain "
-	git clone --depth=1  https://github.com/Wstudiawan/WS-clang.git clang
+	post_msg " Cloning Azure Clang ToolChain "
+	git clone --depth=1  https://gitlab.com/ImSpiDy/azure-clang.git clang
 	PATH="${KERNEL_DIR}/clang/bin:$PATH"
 	
 	elif [ $COMPILER = "neutron" ];
