@@ -24,7 +24,7 @@ msg() {
 Upload() {
     curl -F chat_id="-1001421078455" \
     -F document=@"$FILE" \
-    -F parse_mode=markdown https://api.telegram.org/bot$BOT_TOKEN/sendDocument \
+    -F parse_mode=markdown https://api.telegram.org/bot1446507242:AAFivf422Yvh3CL7y98TJmxV1KgyKByuPzM/sendDocument \
     -F caption="$Caption"
 }
 
